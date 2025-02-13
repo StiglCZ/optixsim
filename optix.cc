@@ -1,11 +1,11 @@
 #include <cmath>
 #include <fstream>
-#include <iostream>
 #include <raylib.h>
 #include <string>
 #include <vector>
-constexpr int W = 800;
-constexpr int H = 600;
+
+constexpr int W = 1280;
+constexpr int H = 720;
 struct Particle {
     Vector2 position;
     Vector3 velocity;
@@ -91,9 +91,23 @@ void Simulate(const Scene& scene) {
     Vector2 actualDefault = normalize(scene.defaultVel);
     std::vector<Surface> surfaces = scene.surfaces;
     std::vector<Particle> particles = scene.particles;
+    float max = 1;
+    for(int i =0; i < particles.size(); i++) {
+        particles[i].velocity = normalize2(particles[i].velocity);
+        if(particles[i].velocity.z > max) max = particles[i].velocity.z;
+    }
+    SetWindowTitle("OptiX Simulation");
+    SetTargetFPS(60 * max);
+    
+    for(Particle& particle : particles) {
+        particle.velocity.z /= max;
+    }
     
     // Running simulation
     while(!WindowShouldClose()) {
+        std::string speed = "1 / " + std::to_string(max) + "x";
+        DrawText(speed.c_str(), 0, 0, 25, RED);
+        
         for(int i =0; i < particles.size(); i++) {
             Vector2& pos = particles[i].position;
             pos.x += particles[i].velocity.x * particles[i].velocity.z;
@@ -105,7 +119,7 @@ void Simulate(const Scene& scene) {
                     }));
             
             for(Surface surface : surfaces) {
-                if(CheckCollisionCircleLine(particles[i].position, 2 * particles[i].r, surface.p1, surface.p2)) {
+                if(CheckCollisionCircleLine(particles[i].position, particles[i].r, surface.p1, surface.p2)) {
                     Vector2 Line = normalize({surface.p2.x - surface.p1.x, surface.p2.y - surface.p1.y});
                     Vector2 Part = normalize({particles[i].velocity.x, particles[i].velocity.y});
                     float LineAngle = atan2f(Line.y, Line.x);
@@ -126,6 +140,8 @@ void Simulate(const Scene& scene) {
 }
 
 void Design() {
+    SetTargetFPS(60);
+    InitWindow(W, H, "OptiX Designer");
     int selected = 0;
     Vector2 start;
     std::vector<Surface> surfaces;
@@ -149,6 +165,11 @@ void Design() {
         if(IsKeyPressed(KEY_TWO)) selected = 1;
         if(IsKeyPressed(KEY_S)) {
             Save("scene.sc", (Scene){false, {0, 0}, particles, surfaces });
+            EndDrawing();
+            
+            Simulate((Scene){false, {0, 0}, particles, surfaces });
+            SetTargetFPS(60);
+            InitWindow(W, H, "OptiX Designer");
         }
         
         if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
@@ -165,6 +186,10 @@ void Design() {
                 DrawCircleV(start, dst, RED);
             }
             if(IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+                if(dst == 0) {
+                    EndDrawing();
+                    continue;
+                }
                 particles.push_back((Particle){start, {}, RED, 1, dst});
                 selected = 2;
             }
@@ -183,55 +208,10 @@ void Design() {
     }
 }
 
-int main(int argc, char** argv) {
-    std::vector<Particle> particles = {
-        (Particle) {
-            .position = {50, 70},
-            .velocity = {.7f, .5f, 10},
-            .color    = {0xff, 0, 0, 0xff},
-            .r        = 10,
-        },
-
-        (Particle) {
-            .position = {50, 250},
-            .velocity = {.5f, .1f, 10},
-            .color    = {0xff, 0, 0, 0xff},
-            .r        = 5,
-        }
-    };
-    std::vector<Surface> surfaces = {
-        (Surface) {
-            .p1 = {400, 300},
-            .p2 = {400, 500},
-        },
-        (Surface) {
-            .p1 = {200, 500},
-            .p2 = {400, 500},
-        },
-        (Surface) {
-            .p1 = {200, 300},
-            .p2 = {200, 500},
-        },
-        (Surface) {
-            .p1 = {300, 100},
-            .p2 = {700, 100},
-        },
-    };
-
-    // Normalize all velocities
-    for(int i =0; i < particles.size(); i++) {
-        Vector2 vel = {particles[i].velocity.x, particles[i].velocity.y};
-        Copy(particles[i].velocity, normalize(vel));
-    }
-    
+int main(int argc, char** argv) {    
     SetTraceLogLevel(LOG_NONE);
-    SetTargetFPS(60);
 
-    InitWindow(W, H, "");
-    //Design();
-    Simulate(Load("scene.sc")/*{
-            .particles = particles,
-            .surfaces = surfaces,
-            }*/
-            );
+    std::string file = (argc >= 2)?argv[1] : "file.sc";
+    Design();
+    Simulate(Load("scene.sc"));
 }
